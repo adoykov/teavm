@@ -118,4 +118,8 @@ public class TShort extends TNumber implements TComparable<TShort> {
     public static short reverseBytes(short i) {
         return (short) ((i << 8) | (i >>> 8));
     }
+
+    public static int toUnsignedInt(short value) {
+        return ((int) value) & 0xffff;
+    }
 }
