@@ -259,7 +259,7 @@ var $rt_javaExceptionProp = Symbol("javaException")
 function $rt_exception(ex) {
     var err = ex.$jsException;
     if (!err) {
-        err = new Error("Java exception thrown");
+        err = new Error("Java exception thrown: " + ex.__proto__.constructor.name + ": " + ex.$message);
         if (typeof Error.captureStackTrace === "function") {
             Error.captureStackTrace(err);
         }
