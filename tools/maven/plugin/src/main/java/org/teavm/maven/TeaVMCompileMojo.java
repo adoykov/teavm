@@ -74,6 +74,10 @@ public class TeaVMCompileMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.outputDirectory}")
     private File classFiles;
 
+    // R3: Added so we can put rt.jar at the end of the classpath.
+    @Parameter(defaultValue = "")
+    private File[] additionalClassPathEntries;
+
     @Parameter
     private List<String> compileScopes;
 
@@ -194,6 +198,7 @@ public class TeaVMCompileMojo extends AbstractMojo {
         StringBuilder classpath = new StringBuilder();
         for (Artifact artifact : project.getArtifacts()) {
             if (!filterByScope(artifact)) {
+                log.info("Artifact skipped due to scope: " + artifact);
                 continue;
             }
             File file = artifact.getFile();
@@ -208,6 +213,15 @@ public class TeaVMCompileMojo extends AbstractMojo {
         }
         classpath.append(classFiles.getPath());
         paths.add(classFiles.getAbsolutePath());
+        if (additionalClassPathEntries != null) {
+            // This can be useful for playing games with using parts of the JDK standard library, when you don't want
+            // them to be normal Maven dependencies.
+            for (File entry : additionalClassPathEntries) {
+                classpath.append(':');
+                classpath.append(entry.getPath());
+                paths.add(entry.getAbsolutePath());
+            }
+        }
         log.info("Using the following classpath for TeaVM: " + classpath);
         return paths;
     }
