@@ -15,15 +15,23 @@
  */
 package org.teavm.classlib.java.nio.charset;
 
-public class TUnsupportedCharsetException extends IllegalArgumentException {
+import org.teavm.classlib.java.lang.TIllegalArgumentException;
+
+public class TUnsupportedCharsetException extends TIllegalArgumentException {
     private static final long serialVersionUID = 2668607022458967777L;
     private String charsetName;
 
     public TUnsupportedCharsetException(String charsetName) {
+        super("TeaVM does not support the " + charsetName + " character set.");
         this.charsetName = charsetName;
     }
 
     public String getCharsetName() {
         return charsetName;
+    }
+
+    @Override
+    public String toString() {
+        return "UnsupportedCharsetException: " + getMessage();
     }
 }

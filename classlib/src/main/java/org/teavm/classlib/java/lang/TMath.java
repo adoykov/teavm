@@ -397,4 +397,13 @@ public final class TMath extends TObject {
         }
         return TFloat.intBitsToFloat(bits);
     }
+
+    public static long addExact(long x, long y) {
+        long r = x + y;
+        // https://www.algotech.solutions/blog/javascript/handle-number-overflow-javascript/
+        if (r - x != y) {
+            throw new TArithmeticException("integer overflow");
+        }
+        return r;
+    }
 }

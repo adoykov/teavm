@@ -16,6 +16,7 @@
 package org.teavm.classlib.java.time;
 
 import org.teavm.classlib.java.lang.TMath;
+import org.teavm.classlib.java.util.TDate;
 
 public final class TInstant implements Comparable<TInstant> {
     public static final TInstant EPOCH = new TInstant(0, 0);
@@ -114,4 +115,8 @@ public final class TInstant implements Comparable<TInstant> {
         return ((int) (seconds ^ (seconds >>> 32))) + 51 * nanos;
     }
 
+    @Override
+    public String toString() {
+        return new TDate(toEpochMilli()).toString();
+    }
 }
