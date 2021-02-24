@@ -124,6 +124,14 @@ public class TThread extends TObject implements TRunnable {
         this.daemon = daemon;
     }
 
+    public final void setName(String name) {
+        this.name = name;
+    }
+
+    public final void setContextClassLoader(ClassLoader cl) {
+        // Ignore.
+    }
+
     public final void join(long millis, int nanos) throws InterruptedException {
         if (currentThread() == this) {
             return;
