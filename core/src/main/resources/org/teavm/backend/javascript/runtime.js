@@ -255,11 +255,23 @@ function $rt_voidcls() {
 function $rt_throw(ex) {
     throw $rt_exception(ex);
 }
-var $rt_javaExceptionProp = Symbol("javaException")
+function $rt_formatErrorMessage(ex) {
+    var exceptionClassName = ex.__proto__.constructor.name;
+    var msg = "Java exception thrown: ";
+    if (exceptionClassName.length === 0) {
+        return msg + ex.$message;
+    } else {
+        return msg + exceptionClassName + ": " + ex.$message;
+    }
+}
+// Stash the underlying Java exception object in the JS error. Not a symbol so the Java exception can be seen outside
+// this compilation unit e.g. by JS catch blocks in HTML.
+var $rt_javaExceptionProp = "javaException";
 function $rt_exception(ex) {
     var err = ex.$jsException;
     if (!err) {
-        err = new Error("Java exception thrown: " + ex.__proto__.constructor.name + ": " + ex.$message);
+        err = new Error($rt_formatErrorMessage(ex));
+        // captureStackTrace is only available on V8/Chrome.
         if (typeof Error.captureStackTrace === "function") {
             Error.captureStackTrace(err);
         }
@@ -594,6 +606,7 @@ function $rt_wrapFunction4(f) {
         return f(this, p1, p2, p3, p4);
     }
 }
+// This is used by Platform.schedule and is a general way to start a "thread" with a callback.
 function $rt_threadStarter(f) {
     return function() {
         var args = Array.prototype.slice.apply(arguments);
