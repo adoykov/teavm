@@ -15,16 +15,30 @@
  */
 package org.teavm.classlib.sun.security.x509;
 
-import java.security.PublicKey;
+import java.io.IOException;
+import java.math.BigInteger;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.Principal;
+import java.security.ProviderException;
+import java.security.Signature;
+import java.security.SignatureException;
 import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateNotYetValidException;
+import java.security.cert.CertificateParsingException;
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
+import org.teavm.classlib.java.security.TPublicKey;
 import org.teavm.classlib.java.security.cert.TCertificate;
 import org.teavm.classlib.java.security.cert.TX509Certificate;
 import org.teavm.classlib.javax.security.auth.x500.TX500Principal;
-import sun.security.util.DerInputStream;
-import sun.security.util.DerValue;
 
 public class TX509CertImpl extends TX509Certificate {
 
@@ -108,7 +122,7 @@ public class TX509CertImpl extends TX509Certificate {
      * the signature of this certificate. Null if the certificate has not
      * yet been verified.
      */
-    private PublicKey verifiedPublicKey;
+    private TPublicKey verifiedPublicKey;
     /**
      * If verifiedPublicKey is not null, name of the provider used to
      * successfully verify the signature of this certificate, or the
@@ -126,6 +140,331 @@ public class TX509CertImpl extends TX509Certificate {
      * Default constructor.
      */
     public TX509CertImpl() { }
+
+    @Override
+    public void checkValidity()
+            throws CertificateExpiredException, CertificateNotYetValidException {
+        Date date = new Date();
+        checkValidity(date);
+    }
+
+    @Override
+    public byte[] getEncoded() throws CertificateEncodingException {
+        return getEncodedInternal().clone();
+    }
+
+    public void verify(TPublicKey key)
+            throws CertificateException, NoSuchAlgorithmException,
+            InvalidKeyException, NoSuchProviderException, SignatureException {
+        verify(key, "");
+    }
+
+    /**
+     * Throws an exception if the certificate was not signed using the
+     * verification key provided.  Successfully verifying a certificate
+     * does <em>not</em> indicate that one should trust the entity which
+     * it represents.
+     *
+     * @param key the public key used for verification.
+     * @param sigProvider the name of the provider.
+     *
+     * @exception NoSuchAlgorithmException on unsupported signature
+     * algorithms.
+     * @exception InvalidKeyException on incorrect key.
+     * @exception NoSuchProviderException on incorrect provider.
+     * @exception SignatureException on signature errors.
+     * @exception CertificateException on encoding errors.
+     */
+    public synchronized void verify(TPublicKey key, String sigProvider)
+            throws CertificateException, NoSuchAlgorithmException,
+            InvalidKeyException, NoSuchProviderException, SignatureException {
+        if (sigProvider == null) {
+            sigProvider = "";
+        }
+        if ((verifiedPublicKey != null) && verifiedPublicKey.equals(key)) {
+            // this certificate has already been verified using
+            // this public key. Make sure providers match, too.
+            if (sigProvider.equals(verifiedProvider)) {
+                if (verificationResult) {
+                    return;
+                } else {
+                    throw new SignatureException("Signature does not match.");
+                }
+            }
+        }
+        if (signedCert == null) {
+            throw new CertificateEncodingException("Uninitialized certificate");
+        }
+        // Verify the signature ...
+        Signature sigVerf = null;
+        String sigName = algId.getName();
+        if (sigProvider.length() == 0) {
+            sigVerf = Signature.getInstance(sigName);
+        } else {
+            sigVerf = Signature.getInstance(sigName, sigProvider);
+        }
+
+        try {
+            initVerifyWithParam(sigVerf, key,
+                    getParamSpec(sigName, getSigAlgParams()));
+        } catch (ProviderException e) {
+            throw new CertificateException(e.getMessage(), e.getCause());
+        } catch (InvalidAlgorithmParameterException e) {
+            throw new CertificateException(e);
+        }
+
+        byte[] rawCert = info.getEncodedInfo();
+        sigVerf.update(rawCert, 0, rawCert.length);
+
+        // verify may throw SignatureException for invalid encodings, etc.
+        verificationResult = sigVerf.verify(signature);
+        verifiedPublicKey = key;
+        verifiedProvider = sigProvider;
+
+        if (verificationResult == false) {
+            throw new SignatureException("Signature does not match.");
+        }
+    }
+
+
+
+    public byte[] getSigAlgParams() {
+        if (algId == null) {
+            return null;
+        }
+        try {
+            return algId.getEncodedParams();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    @Override
+    public int getVersion() {
+        if (info == null) {
+            return -1;
+        }
+        try {
+            int vers = ((Integer)info.get(NAME
+                    + DOT + VERSION)).intValue();
+            return vers+1;
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    @Override
+    public byte[] getExtensionValue(String oid) {
+        try {
+            ObjectIdentifier findOID = new ObjectIdentifier(oid);
+            String extAlias = OIDMap.getName(findOID);
+            Extension certExt = null;
+            CertificateExtensions exts = (CertificateExtensions)info.get(
+                    CertificateExtensions.NAME);
+
+            if (extAlias == null) { // may be unknown
+                // get the extensions, search thru' for this oid
+                if (exts == null) {
+                    return null;
+                }
+
+                for (Extension ex : exts.getAllExtensions()) {
+                    ObjectIdentifier inCertOID = ex.getExtensionId();
+                    if (inCertOID.equals((Object)findOID)) {
+                        certExt = ex;
+                        break;
+                    }
+                }
+            } else { // there's sub-class that can handle this extension
+                try {
+                    certExt = (Extension)this.get(extAlias);
+                } catch (CertificateException e) {
+                    // get() throws an Exception instead of returning null, ignore
+                }
+            }
+            if (certExt == null) {
+                if (exts != null) {
+                    certExt = exts.getUnparseableExtensions().get(oid);
+                }
+                if (certExt == null) {
+                    return null;
+                }
+            }
+            byte[] extData = certExt.getExtensionValue();
+            if (extData == null) {
+                return null;
+            }
+            DerOutputStream out = new DerOutputStream();
+            out.putOctetString(extData);
+            return out.toByteArray();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public Object get(String name)
+            throws CertificateParsingException {
+        X509AttributeName attr = new X509AttributeName(name);
+        String id = attr.getPrefix();
+        if (!(id.equalsIgnoreCase(NAME))) {
+            throw new CertificateParsingException("Invalid root of "
+                    + "attribute name, expected [" + NAME +
+                    "], received " + "[" + id + "]");
+        }
+        attr = new X509AttributeName(attr.getSuffix());
+        id = attr.getPrefix();
+
+        if (id.equalsIgnoreCase(INFO)) {
+            if (info == null) {
+                return null;
+            }
+            if (attr.getSuffix() != null) {
+                try {
+                    return info.get(attr.getSuffix());
+                } catch (IOException e) {
+                    throw new CertificateParsingException(e.toString());
+                } catch (CertificateException e) {
+                    throw new CertificateParsingException(e.toString());
+                }
+            } else {
+                return info;
+            }
+        } else if (id.equalsIgnoreCase(ALG_ID)) {
+            return(algId);
+        } else if (id.equalsIgnoreCase(SIGNATURE)) {
+            if (signature != null) {
+                return signature.clone();
+            } else {
+                return null;
+            }
+        } else if (id.equalsIgnoreCase(SIGNED_CERT)) {
+            if (signedCert != null) {
+                return signedCert.clone();
+            } else {
+                return null;
+            }
+        } else {
+            throw new CertificateParsingException("Attribute name not "
+                    + "recognized or get() not allowed for the same: " + id);
+        }
+    }
+
+    @Override
+    public BigInteger getSerialNumber() {
+        SerialNumber ser = getSerialNumberObject();
+
+        return ser != null ? ser.getNumber() : null;
+    }
+
+    public SerialNumber getSerialNumberObject() {
+        if (info == null) {
+            return null;
+        }
+        try {
+            SerialNumber ser = (SerialNumber)info.get(
+                    CertificateSerialNumber.NAME + DOT +
+                            CertificateSerialNumber.NUMBER);
+            return ser;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+
+    @Override
+    public Set<String> getNonCriticalExtensionOIDs() {
+        if (info == null) {
+            return null;
+        }
+        try {
+            CertificateExtensions exts = (CertificateExtensions)info.get(
+                    CertificateExtensions.NAME);
+            if (exts == null) {
+                return null;
+            }
+            Set<String> extSet = new TreeSet<>();
+            for (Extension ex : exts.getAllExtensions()) {
+                if (!ex.isCritical()) {
+                    extSet.add(ex.getExtensionId().toString());
+                }
+            }
+            extSet.addAll(exts.getUnparseableExtensions().keySet());
+            return extSet;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+
+    @Override
+    public Set<String> getCriticalExtensionOIDs() {
+        if (info == null) {
+            return null;
+        }
+        try {
+            CertificateExtensions exts = (CertificateExtensions)info.get(
+                    CertificateExtensions.NAME);
+            if (exts == null) {
+                return null;
+            }
+            Set<String> extSet = new TreeSet<>();
+            for (Extension ex : exts.getAllExtensions()) {
+                if (ex.isCritical()) {
+                    extSet.add(ex.getExtensionId().toString());
+                }
+            }
+            return extSet;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public boolean hasUnsupportedCriticalExtension() {
+        if (info == null) {
+            return false;
+        }
+        try {
+            CertificateExtensions exts = (CertificateExtensions)info.get(
+                    CertificateExtensions.NAME);
+            if (exts == null) {
+                return false;
+            }
+            return exts.hasUnsupportedCriticalExtension();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @Override
+    public Principal getIssuerDN() {
+        if (info == null) {
+            return null;
+        }
+        try {
+            Principal issuer = (Principal)info.get(X509CertInfo.ISSUER + DOT +
+                    X509CertInfo.DN_NAME);
+            return issuer;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public void checkValidity(Date date)
+            throws CertificateExpiredException, CertificateNotYetValidException {
+
+        CertificateValidity interval = null;
+        try {
+            interval = (CertificateValidity)info.get(CertificateValidity.NAME);
+        } catch (Exception e) {
+            throw new CertificateNotYetValidException("Incorrect validity period");
+        }
+        if (interval == null) {
+            throw new CertificateNotYetValidException("Null validity period");
+        }
+        interval.valid(date);
+    }
 
     public static byte[] getEncodedInternal(TCertificate cert)
             throws CertificateEncodingException {

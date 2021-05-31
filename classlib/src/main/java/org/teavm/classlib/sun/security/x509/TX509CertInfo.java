@@ -16,56 +16,45 @@
 package org.teavm.classlib.sun.security.x509;
 
 import java.io.IOException;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateParsingException;
 import java.util.HashMap;
 import java.util.Map;
-import sun.security.x509.CertificateAlgorithmId;
-import sun.security.x509.CertificateExtensions;
-import sun.security.x509.CertificateSerialNumber;
-import sun.security.x509.CertificateValidity;
-import sun.security.x509.CertificateVersion;
-import sun.security.x509.CertificateX509Key;
-import sun.security.x509.UniqueIdentity;
-import sun.security.x509.X500Name;
-import sun.security.x509.X509AttributeName;
-import sun.security.x509.X509CertInfo;
 
 public class TX509CertInfo {
-    /**
-     * Identifier for this attribute, to be used with the
-     * get, set, delete methods of Certificate, x509 type.
-     */
     public static final String IDENT = "x509.info";
     // Certificate attribute names
     public static final String NAME = "info";
     public static final String DN_NAME = "dname";
-    public static final String VERSION = TCertificateVersion.NAME;
-    public static final String SERIAL_NUMBER = TCertificateSerialNumber.NAME;
-    public static final String ALGORITHM_ID = TCertificateAlgorithmId.NAME;
+    public static final String VERSION = CertificateVersion.NAME;
+    public static final String SERIAL_NUMBER = CertificateSerialNumber.NAME;
+    public static final String ALGORITHM_ID = CertificateAlgorithmId.NAME;
     public static final String ISSUER = "issuer";
     public static final String SUBJECT = "subject";
-    public static final String VALIDITY = TCertificateValidity.NAME;
-    public static final String KEY = TCertificateX509Key.NAME;
+    public static final String VALIDITY = CertificateValidity.NAME;
+    public static final String KEY = CertificateX509Key.NAME;
     public static final String ISSUER_ID = "issuerID";
     public static final String SUBJECT_ID = "subjectID";
-    public static final String EXTENSIONS = TCertificateExtensions.NAME;
+    public static final String EXTENSIONS = CertificateExtensions.NAME;
 
     // X509.v1 data
     protected CertificateVersion version = new CertificateVersion();
-    protected CertificateSerialNumber serialNum = null;
-    protected CertificateAlgorithmId algId = null;
-    protected X500Name issuer = null;
+    protected CertificateSerialNumber   serialNum = null;
+    protected CertificateAlgorithmId    algId = null;
+    protected X500Name                  issuer = null;
     protected X500Name                  subject = null;
-    protected CertificateValidity interval = null;
-    protected CertificateX509Key pubKey = null;
+    protected CertificateValidity       interval = null;
+    protected CertificateX509Key        pubKey = null;
 
     // X509.v2 & v3 extensions
-    protected UniqueIdentity issuerUniqueId = null;
+    protected UniqueIdentity   issuerUniqueId = null;
     protected UniqueIdentity  subjectUniqueId = null;
 
-    protected CertificateExtensions extensions = null;
+    // X509.v3 extensions
+    protected CertificateExtensions     extensions = null;
 
+    // Attribute numbers for internal manipulation
     private static final int ATTR_VERSION = 1;
     private static final int ATTR_SERIAL = 2;
     private static final int ATTR_ALGORITHM = 3;
@@ -76,6 +65,10 @@ public class TX509CertInfo {
     private static final int ATTR_ISSUER_ID = 8;
     private static final int ATTR_SUBJECT_ID = 9;
     private static final int ATTR_EXTENSIONS = 10;
+
+    // DER encoded CertificateInfo data
+    private byte[]      rawCertInfo = null;
+
 
     public Object get(String name)
             throws CertificateException, IOException {
@@ -171,6 +164,70 @@ public class TX509CertInfo {
         map.put(SUBJECT_ID, Integer.valueOf(ATTR_SUBJECT_ID));
         map.put(EXTENSIONS, Integer.valueOf(ATTR_EXTENSIONS));
     }
+
+    public byte[] getEncodedInfo() throws CertificateEncodingException {
+        try {
+            if (rawCertInfo == null) {
+                DerOutputStream tmp = new DerOutputStream();
+                emit(tmp);
+                rawCertInfo = tmp.toByteArray();
+            }
+            return rawCertInfo.clone();
+        } catch (IOException e) {
+            throw new CertificateEncodingException(e.toString());
+        } catch (CertificateException e) {
+            throw new CertificateEncodingException(e.toString());
+        }
+    }
+
+    private void emit(DerOutputStream out)
+            throws CertificateException, IOException {
+        DerOutputStream tmp = new DerOutputStream();
+
+        // version number, iff not V1
+        version.encode(tmp);
+
+        // Encode serial number, issuer signing algorithm, issuer name
+        // and validity
+        serialNum.encode(tmp);
+        algId.encode(tmp);
+
+        if ((version.compare(CertificateVersion.V1) == 0) &&
+                (issuer.toString() == null)) {
+            throw new CertificateParsingException(
+                    "Null issuer DN not allowed in v1 certificate");
+        }
+
+        issuer.encode(tmp);
+        interval.encode(tmp);
+
+        // Encode subject (principal) and associated key
+        if ((version.compare(CertificateVersion.V1) == 0) &&
+                (subject.toString() == null))
+            throw new CertificateParsingException(
+                    "Null subject DN not allowed in v1 certificate");
+        subject.encode(tmp);
+        pubKey.encode(tmp);
+
+        // Encode issuerUniqueId & subjectUniqueId.
+        if (issuerUniqueId != null) {
+            issuerUniqueId.encode(tmp, DerValue.createTag(DerValue.TAG_CONTEXT,
+                    false,(byte)1));
+        }
+        if (subjectUniqueId != null) {
+            subjectUniqueId.encode(tmp, DerValue.createTag(DerValue.TAG_CONTEXT,
+                    false,(byte)2));
+        }
+
+        // Write all the extensions.
+        if (extensions != null) {
+            extensions.encode(tmp);
+        }
+
+        // Wrap the data; encoding of the "raw" cert is now complete.
+        out.write(DerValue.tag_Sequence, tmp);
+    }
+
 
     /*
      * Get the Issuer or Subject name

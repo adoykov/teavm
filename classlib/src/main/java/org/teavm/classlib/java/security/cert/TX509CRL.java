@@ -36,7 +36,7 @@ import org.teavm.classlib.sun.security.x509.TX509CRLImpl;
 import sun.security.util.SignatureUtil;
 import sun.security.x509.AlgorithmId;
 
-public abstract class TX509CRL extends CRL implements X509Extension {
+public abstract class TX509CRL extends TCRL implements X509Extension {
     private transient TX500Principal issuerPrincipal;
     private AlgorithmId sigAlgId = null; // sig alg in CRL
 

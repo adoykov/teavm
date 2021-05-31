@@ -20,6 +20,7 @@ import java.security.PublicKey;
 import java.security.cert.CRLException;
 import java.security.cert.Certificate;
 import java.security.cert.X509CRLEntry;
+import java.security.cert.X509Certificate;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Enumeration;
@@ -30,6 +31,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import javax.security.auth.x500.X500Principal;
+import org.teavm.classlib.java.security.cert.TCertificate;
 import org.teavm.classlib.java.security.cert.TX509CRL;
 import org.teavm.classlib.java.security.cert.TX509Certificate;
 import org.teavm.classlib.javax.security.auth.x500.TX500Principal;
@@ -43,6 +45,7 @@ import sun.security.x509.CRLExtensions;
 import sun.security.x509.Extension;
 import sun.security.x509.OIDMap;
 import sun.security.x509.X500Name;
+import sun.security.x509.X509CRLImpl;
 
 public class TX509CRLImpl extends TX509CRL {
 
@@ -181,7 +184,7 @@ public class TX509CRLImpl extends TX509CRL {
         return extSet;
     }
 
-    public boolean isRevoked(Certificate cert) {
+    public boolean isRevoked(TCertificate cert) {
         if (revokedMap.isEmpty() || (!(cert instanceof TX509Certificate))) {
             return false;
         }
