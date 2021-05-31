@@ -16,15 +16,17 @@
 package org.teavm.classlib.sun.security.x509;
 
 import java.security.PublicKey;
+import java.security.cert.CertificateEncodingException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import org.teavm.classlib.java.security.cert.TCertificate;
 import org.teavm.classlib.java.security.cert.TX509Certificate;
 import org.teavm.classlib.javax.security.auth.x500.TX500Principal;
 import sun.security.util.DerInputStream;
 import sun.security.util.DerValue;
 
-public class TX509CertImpl {
+public class TX509CertImpl extends TX509Certificate {
 
     private static final long serialVersionUID = -3457612960190864406L;
 
@@ -124,6 +126,23 @@ public class TX509CertImpl {
      * Default constructor.
      */
     public TX509CertImpl() { }
+
+    public static byte[] getEncodedInternal(TCertificate cert)
+            throws CertificateEncodingException {
+        if (cert instanceof TX509CertImpl) {
+            return ((TX509CertImpl)cert).getEncodedInternal();
+        } else {
+            return cert.getEncoded();
+        }
+    }
+
+    public byte[] getEncodedInternal() throws CertificateEncodingException {
+        if (signedCert == null) {
+            throw new CertificateEncodingException(
+                    "Null certificate to encode");
+        }
+        return signedCert;
+    }
 
     public TX500Principal getIssuerX500Principal() {
         if (info == null) {

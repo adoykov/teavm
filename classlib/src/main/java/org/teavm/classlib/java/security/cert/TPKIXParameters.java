@@ -73,6 +73,18 @@ public class TPKIXParameters {
         this.certStores = new ArrayList<CertStore>();
     }
 
+    public void setRevocationEnabled(boolean val) {
+        revocationEnabled = val;
+    }
+
+    public void setDate(Date date) {
+        if (date != null) {
+            this.date = (Date) date.clone();
+        } else {
+            date = null;
+        }
+    }
+
     /**
      * Creates an instance of {@code PKIXParameters} that
      * populates the set of most-trusted CAs from the trusted

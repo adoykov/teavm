@@ -25,7 +25,7 @@ import java.util.Date;
 import org.teavm.classlib.javax.security.auth.x500.TX500Principal;
 import org.teavm.classlib.sun.security.x509.TX509CertImpl;
 
-public abstract class TX509Certificate extends Certificate
+public abstract class TX509Certificate extends TCertificate
         implements X509Extension {
     private static final long serialVersionUID = -2491127588187038216L;
 
@@ -37,32 +37,6 @@ public abstract class TX509Certificate extends Certificate
     protected TX509Certificate() {
         super("X.509");
     }
-
-    /**
-     * Checks that the certificate is currently valid. It is if
-     * the current date and time are within the validity period given in the
-     * certificate.
-     * <p>
-     * The validity period consists of two date/time values:
-     * the first and last dates (and times) on which the certificate
-     * is valid. It is defined in
-     * ASN.1 as:
-     * <pre>
-     * validity             Validity
-     *
-     * Validity ::= SEQUENCE {
-     *     notBefore      CertificateValidityDate,
-     *     notAfter       CertificateValidityDate }
-     *
-     * CertificateValidityDate ::= CHOICE {
-     *     utcTime        UTCTime,
-     *     generalTime    GeneralizedTime }
-     * </pre>
-     *
-     * @exception CertificateExpiredException if the certificate has expired.
-     * @exception CertificateNotYetValidException if the certificate is not
-     * yet valid.
-     */
     public abstract void checkValidity()
             throws CertificateExpiredException, CertificateNotYetValidException;
 
