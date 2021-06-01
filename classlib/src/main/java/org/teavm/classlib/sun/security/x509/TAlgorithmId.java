@@ -16,13 +16,23 @@
 package org.teavm.classlib.sun.security.x509;
 
 import java.io.IOException;
+import java.security.AlgorithmParameters;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
+import java.util.Map;
+import sun.security.util.DerInputStream;
+import sun.security.util.DerValue;
+import sun.security.util.ObjectIdentifier;
 
 public class TAlgorithmId {
 
     private ObjectIdentifier algid;
-    protected DerValue          params;
+    protected DerValue params;
     private static final Map<ObjectIdentifier,String> nameTable;
+
+    // The (parsed) parameters
+    private AlgorithmParameters algParams;
+    private boolean constructedFromDer = true;
 
 
     /**
@@ -135,7 +145,7 @@ public class TAlgorithmId {
     public static final ObjectIdentifier sha512_224WithRSAEncryption_oid =
             oid(1, 2, 840, 113549, 1, 1, 15);
     public static final ObjectIdentifier sha512_256WithRSAEncryption_oid =
-            oid(1, 2, 840, 113549, 1, 1, 16);;
+            oid(1, 2, 840, 113549, 1, 1, 16);
 
     public static final ObjectIdentifier shaWithDSA_OIW_oid;
     public static final ObjectIdentifier sha1WithDSA_OIW_oid;
@@ -375,8 +385,8 @@ public class TAlgorithmId {
         }
         if ((params != null) && algid.equals((Object)specifiedWithECDSA_oid)) {
             try {
-                AlgorithmId paramsId =
-                        AlgorithmId.parse(new DerValue(params.toByteArray()));
+                TAlgorithmId paramsId =
+                        TAlgorithmId.parse(new DerValue(params.toByteArray()));
                 String paramsName = paramsId.getName();
                 algName = makeSigAlg(paramsName, "EC");
             } catch (IOException e) {
@@ -401,4 +411,66 @@ public class TAlgorithmId {
                 : params.toByteArray();
     }
 
+    public static TAlgorithmId parse(DerValue val) throws IOException {
+        if (val.tag != DerValue.tag_Sequence) {
+            throw new IOException("algid parse error, not a sequence");
+        }
+
+        /*
+         * Get the algorithm ID and any parameters.
+         */
+        ObjectIdentifier        algid;
+        DerValue                params;
+        DerInputStream in = val.toDerInputStream();
+
+        algid = in.getOID();
+        if (in.available() == 0) {
+            params = null;
+        } else {
+            params = in.getDerValue();
+            if (params.tag == DerValue.tag_Null) {
+                if (params.length() != 0) {
+                    throw new IOException("invalid NULL");
+                }
+                params = null;
+            }
+            if (in.available() != 0) {
+                throw new IOException("Invalid AlgorithmIdentifier: extra data");
+            }
+        }
+
+        return new TAlgorithmId(algid, params);
+    }
+
+    public TAlgorithmId(ObjectIdentifier oid, AlgorithmParameters algparams) {
+        algid = oid;
+        algParams = algparams;
+        constructedFromDer = false;
+    }
+
+    private TAlgorithmId(ObjectIdentifier oid, DerValue params)
+            throws IOException {
+        this.algid = oid;
+        this.params = params;
+        if (this.params != null) {
+            decodeParams();
+        }
+    }
+
+    protected void decodeParams() throws IOException {
+        String algidName = getName();
+        try {
+            algParams = AlgorithmParameters.getInstance(algidName);
+        } catch (NoSuchAlgorithmException e) {
+            /*
+             * This algorithm parameter type is not supported, so we cannot
+             * parse the parameters.
+             */
+            algParams = null;
+            return;
+        }
+
+        // Decode (parse) the parameters
+        algParams.init(params.toByteArray());
+    }
 }
