@@ -82,6 +82,14 @@ public class TRuntime {
         return Integer.MAX_VALUE;
     }
 
+    /**
+     * The java.lang.Runtime.maxMemory() method returns the maximum amount of memory that the Java
+     * virtual machine will attempt to use. If there is no inherent limit then the value Long.MAX_VALUE
+     * will be returned.
+     */
+    @DelegateTo("totalMemoryLowLevel")
+    public long maxMemory() { return Integer.MAX_VALUE; }
+
     private long totalMemoryLowLevel() {
         return GC.availableBytes();
     }
