@@ -1,0 +1,247 @@
+/*
+ *  Copyright 2021 alexander.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+package org.teavm.classlib.sun.security.x509;
+
+import java.io.IOException;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateParsingException;
+import java.util.HashMap;
+import java.util.Map;
+
+public class TX509CertInfo {
+    public static final String IDENT = "x509.info";
+    // Certificate attribute names
+    public static final String NAME = "info";
+    public static final String DN_NAME = "dname";
+    public static final String VERSION = CertificateVersion.NAME;
+    public static final String SERIAL_NUMBER = CertificateSerialNumber.NAME;
+    public static final String ALGORITHM_ID = CertificateAlgorithmId.NAME;
+    public static final String ISSUER = "issuer";
+    public static final String SUBJECT = "subject";
+    public static final String VALIDITY = CertificateValidity.NAME;
+    public static final String KEY = CertificateX509Key.NAME;
+    public static final String ISSUER_ID = "issuerID";
+    public static final String SUBJECT_ID = "subjectID";
+    public static final String EXTENSIONS = CertificateExtensions.NAME;
+
+    // X509.v1 data
+    protected CertificateVersion version = new CertificateVersion();
+    protected CertificateSerialNumber   serialNum = null;
+    protected CertificateAlgorithmId    algId = null;
+    protected X500Name                  issuer = null;
+    protected X500Name                  subject = null;
+    protected CertificateValidity       interval = null;
+    protected CertificateX509Key        pubKey = null;
+
+    // X509.v2 & v3 extensions
+    protected UniqueIdentity   issuerUniqueId = null;
+    protected UniqueIdentity  subjectUniqueId = null;
+
+    // X509.v3 extensions
+    protected CertificateExtensions     extensions = null;
+
+    // Attribute numbers for internal manipulation
+    private static final int ATTR_VERSION = 1;
+    private static final int ATTR_SERIAL = 2;
+    private static final int ATTR_ALGORITHM = 3;
+    private static final int ATTR_ISSUER = 4;
+    private static final int ATTR_VALIDITY = 5;
+    private static final int ATTR_SUBJECT = 6;
+    private static final int ATTR_KEY = 7;
+    private static final int ATTR_ISSUER_ID = 8;
+    private static final int ATTR_SUBJECT_ID = 9;
+    private static final int ATTR_EXTENSIONS = 10;
+
+    // DER encoded CertificateInfo data
+    private byte[]      rawCertInfo = null;
+
+
+    public Object get(String name)
+            throws CertificateException, IOException {
+        X509AttributeName attrName = new X509AttributeName(name);
+
+        int attr = attributeMap(attrName.getPrefix());
+        if (attr == 0) {
+            throw new CertificateParsingException(
+                    "Attribute name not recognized: " + name);
+        }
+        String suffix = attrName.getSuffix();
+
+        switch (attr) { // frequently used attributes first
+            case (ATTR_EXTENSIONS):
+                if (suffix == null) {
+                    return(extensions);
+                } else {
+                    if (extensions == null) {
+                        return null;
+                    } else {
+                        return(extensions.get(suffix));
+                    }
+                }
+            case (ATTR_SUBJECT):
+                if (suffix == null) {
+                    return(subject);
+                } else {
+                    return(getX500Name(suffix, false));
+                }
+            case (ATTR_ISSUER):
+                if (suffix == null) {
+                    return(issuer);
+                } else {
+                    return(getX500Name(suffix, true));
+                }
+            case (ATTR_KEY):
+                if (suffix == null) {
+                    return(pubKey);
+                } else {
+                    return(pubKey.get(suffix));
+                }
+            case (ATTR_ALGORITHM):
+                if (suffix == null) {
+                    return(algId);
+                } else {
+                    return(algId.get(suffix));
+                }
+            case (ATTR_VALIDITY):
+                if (suffix == null) {
+                    return(interval);
+                } else {
+                    return(interval.get(suffix));
+                }
+            case (ATTR_VERSION):
+                if (suffix == null) {
+                    return(version);
+                } else {
+                    return(version.get(suffix));
+                }
+            case (ATTR_SERIAL):
+                if (suffix == null) {
+                    return(serialNum);
+                } else {
+                    return(serialNum.get(suffix));
+                }
+            case (ATTR_ISSUER_ID):
+                return(issuerUniqueId);
+            case (ATTR_SUBJECT_ID):
+                return(subjectUniqueId);
+        }
+        return null;
+    }
+
+    private int attributeMap(String name) {
+        Integer num = map.get(name);
+        if (num == null) {
+            return 0;
+        }
+        return num.intValue();
+    }
+
+    // The certificate attribute name to integer mapping stored here
+    private static final Map<String,Integer> map = new HashMap<String,Integer>();
+    static {
+        map.put(VERSION, Integer.valueOf(ATTR_VERSION));
+        map.put(SERIAL_NUMBER, Integer.valueOf(ATTR_SERIAL));
+        map.put(ALGORITHM_ID, Integer.valueOf(ATTR_ALGORITHM));
+        map.put(ISSUER, Integer.valueOf(ATTR_ISSUER));
+        map.put(VALIDITY, Integer.valueOf(ATTR_VALIDITY));
+        map.put(SUBJECT, Integer.valueOf(ATTR_SUBJECT));
+        map.put(KEY, Integer.valueOf(ATTR_KEY));
+        map.put(ISSUER_ID, Integer.valueOf(ATTR_ISSUER_ID));
+        map.put(SUBJECT_ID, Integer.valueOf(ATTR_SUBJECT_ID));
+        map.put(EXTENSIONS, Integer.valueOf(ATTR_EXTENSIONS));
+    }
+
+    public byte[] getEncodedInfo() throws CertificateEncodingException {
+        try {
+            if (rawCertInfo == null) {
+                DerOutputStream tmp = new DerOutputStream();
+                emit(tmp);
+                rawCertInfo = tmp.toByteArray();
+            }
+            return rawCertInfo.clone();
+        } catch (IOException e) {
+            throw new CertificateEncodingException(e.toString());
+        } catch (CertificateException e) {
+            throw new CertificateEncodingException(e.toString());
+        }
+    }
+
+    private void emit(DerOutputStream out)
+            throws CertificateException, IOException {
+        DerOutputStream tmp = new DerOutputStream();
+
+        // version number, iff not V1
+        version.encode(tmp);
+
+        // Encode serial number, issuer signing algorithm, issuer name
+        // and validity
+        serialNum.encode(tmp);
+        algId.encode(tmp);
+
+        if ((version.compare(CertificateVersion.V1) == 0) &&
+                (issuer.toString() == null)) {
+            throw new CertificateParsingException(
+                    "Null issuer DN not allowed in v1 certificate");
+        }
+
+        issuer.encode(tmp);
+        interval.encode(tmp);
+
+        // Encode subject (principal) and associated key
+        if ((version.compare(CertificateVersion.V1) == 0) &&
+                (subject.toString() == null))
+            throw new CertificateParsingException(
+                    "Null subject DN not allowed in v1 certificate");
+        subject.encode(tmp);
+        pubKey.encode(tmp);
+
+        // Encode issuerUniqueId & subjectUniqueId.
+        if (issuerUniqueId != null) {
+            issuerUniqueId.encode(tmp, DerValue.createTag(DerValue.TAG_CONTEXT,
+                    false,(byte)1));
+        }
+        if (subjectUniqueId != null) {
+            subjectUniqueId.encode(tmp, DerValue.createTag(DerValue.TAG_CONTEXT,
+                    false,(byte)2));
+        }
+
+        // Write all the extensions.
+        if (extensions != null) {
+            extensions.encode(tmp);
+        }
+
+        // Wrap the data; encoding of the "raw" cert is now complete.
+        out.write(DerValue.tag_Sequence, tmp);
+    }
+
+
+    /*
+     * Get the Issuer or Subject name
+     */
+    private Object getX500Name(String name, boolean getIssuer)
+            throws IOException {
+        if (name.equalsIgnoreCase(X509CertInfo.DN_NAME)) {
+            return getIssuer ? issuer : subject;
+        } else if (name.equalsIgnoreCase("x500principal")) {
+            return getIssuer ? issuer.asX500Principal()
+                    : subject.asX500Principal();
+        } else {
+            throw new IOException("Attribute name not recognized.");
+        }
+    }
+
+}
